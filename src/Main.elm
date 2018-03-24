@@ -18,8 +18,9 @@ import Html
         , select
         , option
         , span
+        , label
         )
-import Html.Attributes exposing (src, type_, placeholder, value, style, class)
+import Html.Attributes exposing (src, type_, placeholder, value, style, class, for, id)
 import Html.Events exposing (onInput, onSubmit, onClick)
 import Time exposing (second)
 import Http
@@ -162,7 +163,7 @@ view model =
         , div []
             [ div [] [ newContactForm model.newContact ]
             , h2 [] [ text "Contacts list" ]
-            , table []
+            , table [class "table"]
                 (tr []
                     [ th [] [ text "Name" ]
                     , th [] [ text "Phone" ]
@@ -213,19 +214,26 @@ newContactForm model =
         , div [ class "card-body" ]
             [ form
                 [ onSubmit Submit ]
-                [ inputField "Jenny" Name model.name
-                , inputField "Work, School, Etc" Context model.context
-                , inputField "(555) 555-5555" Number model.number
-                , select [] [ option [] [ text model.countryCode ] ]
-                , button [ type_ "submit" ] [ text "Store" ]
+                [ div [ class "form-row" ]
+                    [ div [ class "col" ] [ inputField "name" "Jenny" Name model.name ]
+                    , div [ class "col" ] [ inputField "context" "Work, School, Etc" Context model.context ]
+                    , div [ class "col" ] [ inputField "number" "(555) 555-5555" Number model.number ]
+                    , div [ class "col" ]
+                        [ select [] [ option [] [ text model.countryCode ] ]
+                        , button [ type_ "submit", class "btn btn-primary" ] [ text "Save" ]
+                        ]
+                    ]
                 ]
             ]
         ]
 
 
-inputField : String -> (String -> msg) -> String -> Html msg
-inputField dummy action val =
-    input [ type_ "text", placeholder dummy, value val, onInput action ] []
+inputField : String -> String -> (String -> msg) -> String -> Html msg
+inputField tagId dummy action val =
+    div [class "form-group"]
+        [label [for tagId] [text tagId]
+         , input [ class "form-control", type_ "text", placeholder dummy, value val, onInput action, id tagId ] []
+        ]
 
 
 
