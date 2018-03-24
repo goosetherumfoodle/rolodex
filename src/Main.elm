@@ -24,7 +24,7 @@ import Html.Attributes exposing (src, type_, placeholder, value, style, class, f
 import Html.Events exposing (onInput, onSubmit, onClick)
 import Time exposing (second)
 import Http
-import Json.Decode
+import Json.Decode exposing (map3, list, field, string)
 import Json.Encode
 import Process
 import Task exposing (attempt)
@@ -35,19 +35,23 @@ import Bootstrap.CDN as CDN
 
 
 type alias Model =
-    { newContact : Contact
+    { newContact : NewContact
     , contacts : List Contact
     , feedback : Maybe (Result String String)
     }
 
 
 type alias Contact =
+    { name : String, context : String, number : String }
+
+
+type alias NewContact =
     { name : String, context : String, number : String, countryCode : String }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( emptyModel, Cmd.none )
+    ( emptyModel, getContacts )
 
 
 emptyModel : Model
@@ -58,7 +62,7 @@ emptyModel =
     }
 
 
-emptyContact : Contact
+emptyContact : NewContact
 emptyContact =
     { name = "", context = "", number = "", countryCode = "US" }
 
@@ -76,74 +80,85 @@ type Msg
     | Success String
     | Delete Contact
     | ClearFeedback
+    | Contacts (List Contact)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg { newContact, contacts, feedback } =
+update msg model =
     case msg of
         Name name ->
-            ( { newContact = { newContact | name = name }
-              , contacts = contacts
-              , feedback = feedback
-              }
-            , Cmd.none
-            )
+            let
+                newContact =
+                    model.newContact
+
+                updatedContact =
+                    { newContact | name = name }
+            in
+                ( { model | newContact = updatedContact }
+                , Cmd.none
+                )
 
         Context context ->
-            ( { newContact = { newContact | context = context }
-              , contacts = contacts
-              , feedback = feedback
-              }
-            , Cmd.none
-            )
+            let
+                newContact =
+                    model.newContact
+
+                updatedContact =
+                    { newContact | context = context }
+            in
+                ( { model | newContact = updatedContact }
+                , Cmd.none
+                )
 
         Number number ->
-            ( { newContact = { newContact | number = number }
-              , contacts = contacts
-              , feedback = feedback
-              }
-            , Cmd.none
-            )
+            let
+                newContact =
+                    model.newContact
+
+                updatedContact =
+                    { newContact | number = number }
+            in
+                ( { model | newContact = updatedContact }
+                , Cmd.none
+                )
 
         Submit ->
-            ( { newContact = emptyContact
-              , contacts = newContact :: contacts
-              , feedback = feedback
-              }
-            , postContact newContact
-            )
+            let
+                contact =
+                    { name = model.newContact.name
+                    , context = model.newContact.context
+                    , number = model.newContact.number
+                    }
+            in
+                ( { model
+                    | newContact = emptyContact
+                    , contacts = contact :: model.contacts
+                  }
+                , postContact model.newContact
+                )
 
         Error msg ->
-            ( { newContact = newContact
-              , contacts = contacts
-              , feedback = Just (Err msg)
-              }
+            ( { model | feedback = Just (Err msg) }
             , Cmd.none
             )
 
         Success msg ->
-            ( { newContact = newContact
-              , contacts = contacts
-              , feedback = Just (Ok msg)
-              }
+            ( { model | feedback = Just (Ok msg) }
             , attempt (always ClearFeedback) (Process.sleep (second * 5))
             )
 
         Delete contact ->
-            ( { newContact = newContact
-              , contacts = removeContact contact contacts
-              , feedback = feedback
-              }
+            ( { model | contacts = removeContact contact model.contacts }
             , deleteContact contact
             )
 
         ClearFeedback ->
-            ( { newContact = newContact
-              , contacts = contacts
-              , feedback = Nothing
-              }
+            ( { model | feedback = Nothing }
             , Cmd.none
             )
+
+        Contacts contacts ->
+            ( { model | contacts = contacts }, Cmd.none )
 
 
 removeContact : Contact -> List Contact -> List Contact
@@ -163,7 +178,7 @@ view model =
         , div []
             [ div [] [ newContactForm model.newContact ]
             , h2 [] [ text "Contacts list" ]
-            , table [class "table"]
+            , table [ class "table" ]
                 (tr []
                     [ th [] [ text "Name" ]
                     , th [] [ text "Phone" ]
@@ -206,8 +221,8 @@ contactRows =
         List.map contactRow
 
 
-newContactForm : Contact -> Html Msg
-newContactForm model =
+newContactForm : NewContact -> Html Msg
+newContactForm contact =
     div [ class "card" ]
         [ div [ class "card-header" ]
             [ h2 [] [ text "New Contact" ] ]
@@ -215,11 +230,11 @@ newContactForm model =
             [ form
                 [ onSubmit Submit ]
                 [ div [ class "form-row" ]
-                    [ div [ class "col" ] [ inputField "name" "Jenny" Name model.name ]
-                    , div [ class "col" ] [ inputField "context" "Work, School, Etc" Context model.context ]
-                    , div [ class "col" ] [ inputField "number" "(555) 555-5555" Number model.number ]
+                    [ div [ class "col" ] [ inputField "name" "Jenny" Name contact.name ]
+                    , div [ class "col" ] [ inputField "context" "Work, School, Etc" Context contact.context ]
+                    , div [ class "col" ] [ inputField "number" "(555) 555-5555" Number contact.number ]
                     , div [ class "col" ]
-                        [ select [] [ option [] [ text model.countryCode ] ]
+                        [ select [] [ option [] [ text contact.countryCode ] ]
                         , button [ type_ "submit", class "btn btn-primary" ] [ text "Save" ]
                         ]
                     ]
@@ -230,9 +245,17 @@ newContactForm model =
 
 inputField : String -> String -> (String -> msg) -> String -> Html msg
 inputField tagId dummy action val =
-    div [class "form-group"]
-        [label [for tagId] [text tagId]
-         , input [ class "form-control", type_ "text", placeholder dummy, value val, onInput action, id tagId ] []
+    div [ class "form-group" ]
+        [ label [ for tagId ] [ text tagId ]
+        , input
+            [ class "form-control"
+            , type_ "text"
+            , placeholder dummy
+            , value val
+            , onInput action
+            , id tagId
+            ]
+            []
         ]
 
 
@@ -269,7 +292,7 @@ deleteContact contact =
             )
 
 
-postContact : Contact -> Cmd Msg
+postContact : NewContact -> Cmd Msg
 postContact contact =
     let
         handler resp =
@@ -292,6 +315,29 @@ postContact contact =
             (Http.post "http://localhost:3000/contacts"
                 (Http.jsonBody contactJson)
                 Json.Decode.value
+            )
+
+
+getContacts : Cmd Msg
+getContacts =
+    let
+        handler resp =
+            case resp of
+                Ok contacts ->
+                    Contacts contacts
+
+                Err _ ->
+                    Error "Error connecting to server"
+    in
+        Http.send handler
+            (Http.get "http://localhost:3000/contacts"
+                (list
+                    (map3 Contact
+                        (field "name" string)
+                        (field "context" string)
+                        (field "number" string)
+                    )
+                )
             )
 
 
