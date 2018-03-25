@@ -1,25 +1,6 @@
-module Main exposing (..)
+port module Main exposing (..)
 
-import Html
-    exposing
-        ( Html
-        , text
-        , div
-        , h1
-        , img
-        , table
-        , tr
-        , td
-        , th
-        , h2
-        , form
-        , input
-        , button
-        , select
-        , option
-        , span
-        , label
-        )
+import Html exposing (..)
 import Html.Attributes exposing (src, type_, placeholder, value, style, class, for, id)
 import Html.Events exposing (onInput, onSubmit, onClick)
 import Time exposing (second)
@@ -29,6 +10,22 @@ import Json.Encode
 import Process
 import Task exposing (attempt)
 import Bootstrap.CDN as CDN
+
+
+---- PORTS ----
+
+
+port toPrettyPrinter : List String -> Cmd msg
+
+
+port fromPrettyPrinter : (String -> msg) -> Sub msg
+
+
+port toFormatIfValid : List String -> Cmd msg
+
+
+port fromFormatIfValid : (Maybe String -> msg) -> Sub msg
+
 
 
 ---- MODEL ----
@@ -46,7 +43,13 @@ type alias Contact =
 
 
 type alias NewContact =
-    { name : String, context : String, number : String, countryCode : String }
+    { name : String
+    , context : String
+    , rawNumber : String
+    , countryCode : String
+    , ppNumber : String
+    , validNumber : Maybe String
+    }
 
 
 init : ( Model, Cmd Msg )
@@ -64,7 +67,13 @@ emptyModel =
 
 emptyContact : NewContact
 emptyContact =
-    { name = "", context = "", number = "", countryCode = "US" }
+    { name = ""
+    , context = ""
+    , rawNumber = ""
+    , countryCode = "US"
+    , ppNumber = ""
+    , validNumber = Nothing
+    }
 
 
 
@@ -74,13 +83,15 @@ emptyContact =
 type Msg
     = Name String
     | Context String
-    | Number String
+    | RawNumber String
     | Submit
     | Error String
     | Success String
     | Delete Contact
     | ClearFeedback
     | Contacts (List Contact)
+    | PrettyPrintNumber String
+    | ValidNumber (Maybe String)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -110,32 +121,40 @@ update msg model =
                 , Cmd.none
                 )
 
-        Number number ->
+        RawNumber number ->
             let
                 newContact =
                     model.newContact
 
                 updatedContact =
-                    { newContact | number = number }
+                    { newContact | rawNumber = number }
             in
                 ( { model | newContact = updatedContact }
-                , Cmd.none
+                , Cmd.batch
+                    [ toPrettyPrinter [ newContact.countryCode, number ]
+                    , toFormatIfValid [ newContact.countryCode, number ]
+                    ]
                 )
 
         Submit ->
-            let
-                contact =
-                    { name = model.newContact.name
-                    , context = model.newContact.context
-                    , number = model.newContact.number
-                    }
-            in
-                ( { model
-                    | newContact = emptyContact
-                    , contacts = contact :: model.contacts
-                  }
-                , postContact model.newContact
-                )
+            case model.newContact.validNumber of
+                Nothing ->
+                    update (Error "Please enter a valid phone number") model
+
+                Just validNumber ->
+                    let
+                        contact =
+                            { name = model.newContact.name
+                            , context = model.newContact.context
+                            , number = validNumber
+                            }
+                    in
+                        ( { model
+                            | newContact = emptyContact
+                            , contacts = contact :: model.contacts
+                          }
+                        , postContact contact
+                        )
 
         Error msg ->
             ( { model | feedback = Just (Err msg) }
@@ -160,10 +179,42 @@ update msg model =
         Contacts contacts ->
             ( { model | contacts = contacts }, Cmd.none )
 
+        PrettyPrintNumber pp ->
+            let
+                newContact =
+                    model.newContact
+
+                updatedContact =
+                    { newContact | ppNumber = pp }
+            in
+                ( { model | newContact = updatedContact }, Cmd.none )
+
+        ValidNumber valid ->
+            let
+                newContact =
+                    model.newContact
+
+                updatedContact =
+                    { newContact | validNumber = valid }
+            in
+                ( { model | newContact = updatedContact }, Cmd.none )
+
 
 removeContact : Contact -> List Contact -> List Contact
 removeContact query =
     List.filter (\elem -> elem.number /= query.number)
+
+
+
+---- SUBSCRIPTIONS ----
+
+
+subscriptions : Model -> Sub Msg
+subscriptions _ =
+    Sub.batch
+        [ fromPrettyPrinter PrettyPrintNumber
+        , fromFormatIfValid ValidNumber
+        ]
 
 
 
@@ -176,17 +227,8 @@ view model =
         [ CDN.stylesheet
         , userFeedback model.feedback
         , div []
-            [ div [] [ newContactForm model.newContact ]
-            , h2 [] [ text "Contacts list" ]
-            , table [ class "table" ]
-                (tr []
-                    [ th [] [ text "Name" ]
-                    , th [] [ text "Phone" ]
-                    , th [] [ text "Context" ]
-                    , th [] [ text "Actions" ]
-                    ]
-                    :: contactRows model.contacts
-                )
+            [ newContactForm model.newContact
+            , contactsTable model.contacts
             ]
         ]
 
@@ -195,13 +237,30 @@ userFeedback : Maybe (Result String String) -> Html Msg
 userFeedback feedback =
     case feedback of
         Nothing ->
-            div [] []
+            div [ class "alert invisible" ] [ text "invisible div" ]
 
         Just (Err msg) ->
-            div [ style [ ( "color", "red" ) ] ] [ text msg ]
+            div [ class "alert alert-danger" ] [ text msg ]
 
         Just (Ok msg) ->
-            div [ style [ ( "color", "green" ) ] ] [ text msg ]
+            div [ class "alert alert-success" ] [ text msg ]
+
+
+contactsTable contacts =
+    div [ class "card mt-3" ]
+        [ div [ class "card-header" ] [ h2 [] [ text "Contacts list" ] ]
+        , div [ class "card-body" ]
+            [ table [ class "table" ]
+                (tr []
+                    [ th [] [ text "Name" ]
+                    , th [] [ text "Phone" ]
+                    , th [] [ text "Context" ]
+                    , th [] [ text "Actions" ]
+                    ]
+                    :: contactRows contacts
+                )
+            ]
+        ]
 
 
 contactRows : List Contact -> List (Html Msg)
@@ -214,7 +273,7 @@ contactRows =
                 , td [] [ text contact.number ]
                 , td []
                     [ span [ onClick (Delete contact) ]
-                        [ text "delete" ]
+                        [ i [ class "fa fa-trash" ] [] ]
                     ]
                 ]
     in
@@ -232,7 +291,19 @@ newContactForm contact =
                 [ div [ class "form-row" ]
                     [ div [ class "col" ] [ inputField "name" "Jenny" Name contact.name ]
                     , div [ class "col" ] [ inputField "context" "Work, School, Etc" Context contact.context ]
-                    , div [ class "col" ] [ inputField "number" "(555) 555-5555" Number contact.number ]
+                    , div [ class "form-group" ]
+                        [ label [ for "newContactNumber" ] [ text "Number" ]
+                        , input
+                            [ class "form-control"
+                            , type_ "text"
+                            , placeholder "(555) 555-5555"
+                            , value contact.rawNumber
+                            , onInput RawNumber
+                            , id "newContactNumber"
+                            ]
+                            []
+                        , div [ class "small" ] [ text contact.ppNumber ]
+                        ]
                     , div [ class "col" ]
                         [ select [] [ option [] [ text contact.countryCode ] ]
                         , button [ type_ "submit", class "btn btn-primary" ] [ text "Save" ]
@@ -283,7 +354,7 @@ deleteContact contact =
             (Http.request
                 { method = "DELETE"
                 , headers = []
-                , url = "http://localhost:3000/contacts/" ++ contact.number
+                , url = "http://localhost:3001/contacts/" ++ contact.number
                 , body = Http.emptyBody
                 , expect = Http.expectStringResponse (\_ -> Ok ())
                 , timeout = Nothing
@@ -292,7 +363,7 @@ deleteContact contact =
             )
 
 
-postContact : NewContact -> Cmd Msg
+postContact : Contact -> Cmd Msg
 postContact contact =
     let
         handler resp =
@@ -312,7 +383,7 @@ postContact contact =
                 ]
     in
         Http.send handler
-            (Http.post "http://localhost:3000/contacts"
+            (Http.post "http://localhost:3001/contacts"
                 (Http.jsonBody contactJson)
                 Json.Decode.value
             )
@@ -330,7 +401,7 @@ getContacts =
                     Error "Error connecting to server"
     in
         Http.send handler
-            (Http.get "http://localhost:3000/contacts"
+            (Http.get "http://localhost:3001/contacts"
                 (list
                     (map3 Contact
                         (field "name" string)
@@ -351,5 +422,5 @@ main =
         { view = view
         , init = init
         , update = update
-        , subscriptions = always Sub.none
+        , subscriptions = subscriptions
         }
