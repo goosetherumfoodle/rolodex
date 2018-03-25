@@ -291,7 +291,7 @@ newContactForm contact =
                 [ div [ class "form-row" ]
                     [ div [ class "col" ] [ inputField "name" "Jenny" Name contact.name ]
                     , div [ class "col" ] [ inputField "context" "Work, School, Etc" Context contact.context ]
-                    , div [ class "form-group" ]
+                    , div [ class "form-group col" ]
                         [ label [ for "newContactNumber" ] [ text "Number" ]
                         , input
                             [ class "form-control"
