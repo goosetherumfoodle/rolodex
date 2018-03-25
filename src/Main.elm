@@ -253,8 +253,8 @@ contactsTable contacts =
             [ table [ class "table" ]
                 (tr []
                     [ th [] [ text "Name" ]
-                    , th [] [ text "Phone" ]
                     , th [] [ text "Context" ]
+                    , th [] [ text "Phone" ]
                     , th [] [ text "Actions" ]
                     ]
                     :: contactRows contacts
