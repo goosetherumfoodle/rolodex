@@ -22,6 +22,13 @@ import Task exposing (attempt)
 import Bootstrap.CDN as CDN
 
 
+-- todos:
+-- only generate valid number on submission?
+-- re-insert as-you-type feedback
+-- on-the-fly field validation?
+-- sorting
+-- searching
+-- extract modules
 ---- PORTS ----
 
 
@@ -305,7 +312,21 @@ validateName ( m, c ) =
 
 
 validateNumber : ( Model, Contact ) -> ( Model, Contact )
-validateNumber ( m, c ) =
+validateNumber modelContact =
+    let
+        results =
+            Result.andThen validateDuplicates <| validateNumberFormat modelContact
+    in
+        case results of
+            Ok res ->
+                res
+
+            Err res ->
+                res
+
+
+validateNumberFormat : ( Model, Contact ) -> Result ( Model, Contact ) ( String, Model, Contact )
+validateNumberFormat ( m, c ) =
     let
         newContact =
             m.newContact
@@ -316,21 +337,56 @@ validateNumber ( m, c ) =
                     updatedNewContact =
                         { newContact | numberError = Just "Invalid number" }
                 in
-                    ( { m
-                        | feedback = badSubmissionFeedback
-                        , newContact = updatedNewContact
-                      }
-                    , c
-                    )
+                    Err
+                        ( { m
+                            | feedback = badSubmissionFeedback
+                            , newContact = updatedNewContact
+                          }
+                        , c
+                        )
 
             Just validNumber ->
                 let
                     updatedNewContact =
                         { newContact | numberError = Nothing }
                 in
-                    ( { m | newContact = updatedNewContact }
-                    , { c | number = validNumber }
-                    )
+                    Ok ( validNumber, m, c )
+
+
+validateDuplicates : ( String, Model, Contact ) -> Result ( Model, Contact ) ( Model, Contact )
+validateDuplicates ( newNumber, m, c ) =
+    let
+        contacts =
+            m.contacts
+
+        hasNumber contact =
+            contact.number == newNumber
+
+        dupes =
+            List.filter hasNumber contacts
+
+        firstDupe =
+            List.head dupes
+    in
+        case firstDupe of
+            Nothing ->
+                Ok ( m, { c | number = newNumber } )
+
+            Just _ ->
+                let
+                    newContact =
+                        m.newContact
+
+                    updatedContact =
+                        { newContact | numberError = Just "We already have a contact with this number" }
+                in
+                    Err
+                        ( { m
+                            | feedback = badSubmissionFeedback
+                            , newContact = updatedContact
+                          }
+                        , c
+                        )
 
 
 badSubmissionFeedback : Maybe (Result String String)
@@ -439,7 +495,13 @@ newContactForm contact =
 
 
 type alias InputDivAttrs =
-    { name : String, example : String, errorMsg : String, constructor : String -> Msg, valueAccessor : NewContact -> String }
+    { name : String
+    , example : String
+    , errorMsg : String
+    , constructor : String -> Msg
+    , valueAccessor : NewContact -> String
+    , errorAccessor : NewContact -> Maybe String
+    }
 
 
 contextInput : NewContact -> Html Msg
@@ -450,6 +512,7 @@ contextInput =
         , errorMsg = ""
         , constructor = Context
         , valueAccessor = .context
+        , errorAccessor = .contextError
         }
 
 
@@ -461,6 +524,7 @@ nameInput =
         , errorMsg = ""
         , constructor = Name
         , valueAccessor = .name
+        , errorAccessor = .nameError
         }
 
 
@@ -472,12 +536,13 @@ numberInput =
         , errorMsg = ""
         , constructor = RawNumber
         , valueAccessor = .rawNumber
+        , errorAccessor = .numberError
         }
 
 
 attrInput : InputDivAttrs -> NewContact -> Html Msg
 attrInput attrs contact =
-    case contact.numberError of
+    case attrs.errorAccessor contact of
         Just errorMsg ->
             errorInputDiv { attrs | errorMsg = errorMsg } contact
 
@@ -487,7 +552,12 @@ attrInput attrs contact =
 
 errorInputDiv : InputDivAttrs -> NewContact -> Html Msg
 errorInputDiv attrs =
-    inputDiv "is-invalid" (div [ class "invalid-feedback" ] [ text attrs.errorMsg ]) attrs
+    inputDiv "is-invalid"
+        (div
+            [ class "invalid-feedback" ]
+            [ text attrs.errorMsg ]
+        )
+        attrs
 
 
 validInputDiv : InputDivAttrs -> NewContact -> Html Msg
