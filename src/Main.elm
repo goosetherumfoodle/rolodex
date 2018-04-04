@@ -1,7 +1,17 @@
 port module Main exposing (..)
 
 import Html exposing (..)
-import Html.Attributes exposing (src, type_, placeholder, value, style, class, for, id)
+import Html.Attributes
+    exposing
+        ( src
+        , type_
+        , placeholder
+        , value
+        , style
+        , class
+        , for
+        , id
+        )
 import Html.Events exposing (onInput, onSubmit, onClick)
 import Time exposing (second)
 import Http
@@ -203,14 +213,21 @@ update msg model =
 
 removeContact : Contact -> List Contact -> List Contact
 removeContact query =
-    List.filter (\elem -> elem.number /= query.number)
+    List.filter <| \elem -> elem.number /= query.number
 
 
 validateSubmission : Model -> Result Model ( Model, Contact )
 validateSubmission m =
     let
         validated =
-            validateContext (validateName (validateNumber ( (resetFeedback m), emptyContact )))
+            validateContext
+                (validateName
+                    (validateNumber
+                        ( (resetFeedback m)
+                        , emptyContact
+                        )
+                    )
+                )
     in
         if hasSubmissionErrors (Tuple.first validated) then
             Err (Tuple.first validated)
@@ -220,24 +237,29 @@ validateSubmission m =
 
 validateContext : ( Model, Contact ) -> ( Model, Contact )
 validateContext ( m, c ) =
-    if (String.length m.newContact.context) < 1 then
-        let
-            newContact =
-                m.newContact
-
-            updatedNewContact =
-                { newContact | contextError = Just "Context missing" }
-        in
-            ( { m | feedback = badSubmissionFeedback, newContact = updatedNewContact }, c )
-    else
-        let
-            newContact =
-                m.newContact
-
-            updatedNewContact =
-                { newContact | contextError = Nothing }
-        in
-            ( { m | newContact = updatedNewContact }, { c | context = newContact.context } )
+    let
+        newContact =
+            m.newContact
+    in
+        if (String.length m.newContact.context) < 1 then
+            let
+                updatedNewContact =
+                    { newContact | contextError = Just "Context missing" }
+            in
+                ( { m
+                    | feedback = badSubmissionFeedback
+                    , newContact = updatedNewContact
+                  }
+                , c
+                )
+        else
+            let
+                updatedNewContact =
+                    { newContact | contextError = Nothing }
+            in
+                ( { m | newContact = updatedNewContact }
+                , { c | context = newContact.context }
+                )
 
 
 hasSubmissionErrors : Model -> Bool
@@ -257,48 +279,58 @@ resetFeedback m =
 
 validateName : ( Model, Contact ) -> ( Model, Contact )
 validateName ( m, c ) =
-    if (String.length m.newContact.name) < 1 then
-        let
-            newContact =
-                m.newContact
-
-            updatedNewContact =
-                { newContact | nameError = Just "Name missing" }
-        in
-            ( { m | feedback = badSubmissionFeedback, newContact = updatedNewContact }, c )
-    else
-        let
-            newContact =
-                m.newContact
-
-            updatedNewContact =
-                { newContact | nameError = Nothing }
-        in
-            ( { m | newContact = updatedNewContact }, { c | name = newContact.name } )
+    let
+        newContact =
+            m.newContact
+    in
+        if (String.length m.newContact.name) < 1 then
+            let
+                updatedNewContact =
+                    { newContact | nameError = Just "Name missing" }
+            in
+                ( { m
+                    | feedback = badSubmissionFeedback
+                    , newContact = updatedNewContact
+                  }
+                , c
+                )
+        else
+            let
+                updatedNewContact =
+                    { newContact | nameError = Nothing }
+            in
+                ( { m | newContact = updatedNewContact }
+                , { c | name = newContact.name }
+                )
 
 
 validateNumber : ( Model, Contact ) -> ( Model, Contact )
 validateNumber ( m, c ) =
-    case m.newContact.validNumber of
-        Nothing ->
-            let
-                newContact =
-                    m.newContact
+    let
+        newContact =
+            m.newContact
+    in
+        case m.newContact.validNumber of
+            Nothing ->
+                let
+                    updatedNewContact =
+                        { newContact | numberError = Just "Invalid number" }
+                in
+                    ( { m
+                        | feedback = badSubmissionFeedback
+                        , newContact = updatedNewContact
+                      }
+                    , c
+                    )
 
-                updatedNewContact =
-                    { newContact | numberError = Just "Invalid number" }
-            in
-                ( { m | feedback = badSubmissionFeedback, newContact = updatedNewContact }, c )
-
-        Just validNumber ->
-            let
-                newContact =
-                    m.newContact
-
-                updatedNewContact =
-                    { newContact | numberError = Nothing }
-            in
-                ( { m | newContact = updatedNewContact }, { c | number = validNumber } )
+            Just validNumber ->
+                let
+                    updatedNewContact =
+                        { newContact | numberError = Nothing }
+                in
+                    ( { m | newContact = updatedNewContact }
+                    , { c | number = validNumber }
+                    )
 
 
 badSubmissionFeedback : Maybe (Result String String)
@@ -307,8 +339,6 @@ badSubmissionFeedback =
 
 
 
--- validateName : Model -> Model
--- validateName m = if (String.length m.newContact.name) > 0 then
 ---- SUBSCRIPTIONS ----
 
 
@@ -398,7 +428,9 @@ newContactForm contact =
                     , numberInput contact
                     , div [ class "col" ]
                         [ select [] [ option [] [ text contact.countryCode ] ]
-                        , button [ type_ "submit", class "btn btn-primary" ] [ text "Save" ]
+                        , button
+                            [ type_ "submit", class "btn btn-primary" ]
+                            [ text "Save" ]
                         ]
                     ]
                 ]
@@ -406,114 +438,87 @@ newContactForm contact =
         ]
 
 
-contextInput : NewContact -> Html Msg
-contextInput contact =
-    case contact.contextError of
-        Just errorMsg ->
-            div [ class "form-group col" ]
-                [ label [ for "newContactContext" ] [ text "Context" ]
-                , input
-                    [ class "form-control is-invalid"
-                    , type_ "text"
-                    , placeholder "Work, School, Etc"
-                    , value contact.context
-                    , onInput Context
-                    , id "newContactContext"
-                    ]
-                    []
-                , div [ class "invalid-feedback" ] [ text errorMsg ]
-                ]
+type alias InputDivAttrs =
+    { name : String, example : String, errorMsg : String, constructor : String -> Msg, valueAccessor : NewContact -> String }
 
-        Nothing ->
-            div [ class "form-group col" ]
-                [ label [ for "newContactContext" ] [ text "Context" ]
-                , input
-                    [ class "form-control"
-                    , type_ "text"
-                    , placeholder "Work, School, Etc"
-                    , value contact.context
-                    , onInput Context
-                    , id "newContactContext"
-                    ]
-                    []
-                , div [ class "invalid-feedback" ] []
-                ]
+
+contextInput : NewContact -> Html Msg
+contextInput =
+    attrInput
+        { name = "Context"
+        , example = "Work, School, etc"
+        , errorMsg = ""
+        , constructor = Context
+        , valueAccessor = .context
+        }
 
 
 nameInput : NewContact -> Html Msg
-nameInput contact =
-    case contact.nameError of
-        Just errorMsg ->
-            div [ class "form-group col" ]
-                [ label [ for "newContactName" ] [ text "Name" ]
-                , input
-                    [ class "form-control is-invalid"
-                    , type_ "text"
-                    , placeholder "Jenny"
-                    , value contact.name
-                    , onInput Name
-                    , id "newContactName"
-                    ]
-                    []
-                , div [ class "invalid-feedback" ] [ text errorMsg ]
-                ]
-
-        Nothing ->
-            div [ class "form-group col" ]
-                [ label [ for "newContactName" ] [ text "Name" ]
-                , input
-                    [ class "form-control"
-                    , type_ "text"
-                    , placeholder "Jenny"
-                    , value contact.name
-                    , onInput Name
-                    , id "newContactName"
-                    ]
-                    []
-                , div [ class "invalid-feedback" ] []
-                ]
+nameInput =
+    attrInput
+        { name = "Name"
+        , example = "Jenny"
+        , errorMsg = ""
+        , constructor = Name
+        , valueAccessor = .name
+        }
 
 
 numberInput : NewContact -> Html Msg
-numberInput contact =
+numberInput =
+    attrInput
+        { name = "Number"
+        , example = "(555) 555-5555"
+        , errorMsg = ""
+        , constructor = RawNumber
+        , valueAccessor = .rawNumber
+        }
+
+
+attrInput : InputDivAttrs -> NewContact -> Html Msg
+attrInput attrs contact =
     case contact.numberError of
         Just errorMsg ->
-            div
-                []
-                [ div [ class "form-group col" ]
-                    [ label [ for "newContactNumber" ] [ text "Number" ]
-                    , input
-                        [ class "form-control is-invalid"
-                        , type_ "text"
-                        , placeholder "(555) 555-5555"
-                        , value contact.rawNumber
-                        , onInput RawNumber
-                        , id "newContactNumber"
-                        ]
-                        []
-                    , div [ class "small" ] [ text contact.ppNumber ]
-                    , div [ class "invalid-feedback" ] [ text errorMsg ]
-                    ]
-                ]
+            errorInputDiv { attrs | errorMsg = errorMsg } contact
 
         Nothing ->
-            div
-                []
-                [ div [ class "form-group col" ]
-                    [ label [ for "newContactNumber" ] [ text "Number" ]
-                    , input
-                        [ class "form-control"
-                        , type_ "text"
-                        , placeholder "(555) 555-5555"
-                        , value contact.rawNumber
-                        , onInput RawNumber
-                        , id "newContactNumber"
-                        ]
-                        []
-                    , div [ class "small" ] [ text contact.ppNumber ]
-                    , div [ class "invalid-feedback" ] []
-                    ]
+            validInputDiv attrs contact
+
+
+errorInputDiv : InputDivAttrs -> NewContact -> Html Msg
+errorInputDiv attrs =
+    inputDiv "is-invalid" (div [ class "invalid-feedback" ] [ text attrs.errorMsg ]) attrs
+
+
+validInputDiv : InputDivAttrs -> NewContact -> Html Msg
+validInputDiv =
+    inputDiv "" emptyDiv
+
+
+emptyDiv : Html msg
+emptyDiv =
+    div [] []
+
+
+inputDiv : String -> Html Msg -> InputDivAttrs -> NewContact -> Html Msg
+inputDiv errorClass errorDiv attrs contact =
+    let
+        inputId =
+            "newContact" ++ attrs.name
+    in
+        div [ class "form-group col" ]
+            [ label [ for inputId ] [ text attrs.name ]
+            , input
+                [ class <| String.join " " [ "form-control", errorClass ]
+                , type_ "text"
+                , placeholder attrs.example
+                , value <| attrs.valueAccessor contact
+                , onInput attrs.constructor
+                , id inputId
                 ]
+                []
+            , errorDiv
+            ]
 
 
 inputField : String -> String -> (String -> msg) -> String -> Html msg
