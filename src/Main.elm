@@ -26,7 +26,7 @@ import Bootstrap.CDN as CDN
 -- only generate valid number on submission?
 -- re-insert as-you-type feedback
 -- on-the-fly field validation?
--- sorting
+-- (better) sorting
 -- searching
 -- extract modules
 ---- PORTS ----
@@ -120,6 +120,7 @@ type Msg
     | Contacts (List Contact)
     | PrettyPrintNumber String
     | ValidNumber (Maybe String)
+    | SortContacts (Contact -> String)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -216,6 +217,11 @@ update msg model =
                     { newContact | validNumber = valid }
             in
                 ( { model | newContact = updatedContact }, Cmd.none )
+
+        SortContacts attribute ->
+            ( { model | contacts = List.sortBy attribute model.contacts }
+            , Cmd.none
+            )
 
 
 removeContact : Contact -> List Contact -> List Contact
@@ -442,8 +448,8 @@ contactsTable contacts =
         , div [ class "card-body" ]
             [ table [ class "table" ]
                 (tr []
-                    [ th [] [ text "Name" ]
-                    , th [] [ text "Context" ]
+                    [ th [ onClick <| SortContacts .name ] [ text "Name" ]
+                    , th [ onClick <| SortContacts .context ] [ text "Context" ]
                     , th [] [ text "Phone" ]
                     , th [] [ text "Actions" ]
                     ]
